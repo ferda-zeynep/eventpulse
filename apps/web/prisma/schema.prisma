@@ -1,0 +1,79 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+enum WebhookProvider {
+  STRIPE
+  GITHUB
+  CLERK
+  DISCORD
+  CUSTOM
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  clerkUserId    String          @unique
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  webhookSources WebhookSource[]
+}
+
+model WebhookSource {
+  id        String          @id @default(uuid())
+  name      String          
+  provider  WebhookProvider
+  secret    String          @unique 
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events    Event[]
+  createdAt DateTime        @default(now())
+}
+
+model Event {
+  id          String        @id @default(uuid())
+  sourceId    String?
+  source      WebhookSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  name        String        
+  payload     Json          
+  createdAt   DateTime      @default(now())
+  jobs        Job[]
+}
+
+model Job {
+  id         String    @id @default(uuid())
+  eventId    String
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  type       String    
+  status     JobStatus @default(PENDING)
+  attempts   Int       @default(0)
+  maxRetries Int       @default(3)
+  bullJobId  String?   
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  logs       JobLog[]
+
+  @@index([status])
+}
+
+model JobLog {
+  id        String   @id @default(uuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  message   String
+  error     String?  
+  createdAt DateTime @default(now())
+}

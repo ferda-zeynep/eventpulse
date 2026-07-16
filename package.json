@@ -1,0 +1,11 @@
+{
+  "name": "eventpulse",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @eventpulse/web",
+    "build:web": "npm run build -w @eventpulse/web"
+  }
+}
