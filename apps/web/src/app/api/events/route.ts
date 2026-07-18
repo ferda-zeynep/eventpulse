@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
+import { eventQueue } from "../../../lib/queue";
 
 export async function POST(request: Request) {
   try {
@@ -19,9 +20,29 @@ export async function POST(request: Request) {
       },
     });
 
+    const job = await eventQueue.add(body.name, {
+      eventId: newEvent.id,
+      name: body.name,
+      payload: body.payload,
+    });
+
+    await prisma.job.create({
+      data: {
+        eventId: newEvent.id,
+        type: "PROCESS_EVENT",
+        status: "PENDING",
+        bullJobId: job.id,
+        maxRetries: 3,
+      },
+    });
+
     return NextResponse.json(
-      { message: "Event received and stored", eventId: newEvent.id },
-      { status: 201 },
+      {
+        message: "Event accepted and queued successfully",
+        eventId: newEvent.id,
+        bullJobId: job.id,
+      },
+      { status: 202 },
     );
   } catch (error) {
     console.error("API Error:", error);
