@@ -9,43 +9,55 @@ const redisConnection = new IORedis(
   },
 );
 
-export const eventWorker = new Worker(
-  "event-queue",
-  async (job) => {
-    console.log(`Processing job ${job.id} of type ${job.name}`);
+const createEventWorker = () => {
+  return new Worker(
+    "event-queue",
+    async (job) => {
+      console.log(`Processing job ${job.id} of type ${job.name}`);
 
-    try {
-      await prisma.job.update({
-        where: { bullJobId: job.id },
-        data: { status: "PROCESSING" },
-      });
+      try {
+        await prisma.job.update({
+          where: { bullJobId: job.id! },
+          data: { status: "PROCESSING" },
+        });
 
-      console.log(`Successfully processed event payload:`, job.data.payload);
+        console.log(`Successfully processed event payload:`, job.data.payload);
 
-      await prisma.job.update({
-        where: { bullJobId: job.id },
-        data: { status: "COMPLETED" },
-      });
-    } catch (error) {
-      console.error(`Failed to process job ${job.id}:`, error);
+        await prisma.job.update({
+          where: { bullJobId: job.id! },
+          data: { status: "COMPLETED" },
+        });
+      } catch (error) {
+        console.error(`Failed to process job ${job.id}:`, error);
 
-      await prisma.job.update({
-        where: { bullJobId: job.id },
-        data: {
-          status: "FAILED",
-          logs: {
-            create: {
-              message: error instanceof Error ? error.message : "Unknown error",
+        await prisma.job.update({
+          where: { bullJobId: job.id! },
+          data: {
+            status: "FAILED",
+            logs: {
+              create: {
+                message:
+                  error instanceof Error ? error.message : "Unknown error",
+              },
             },
           },
-        },
-      });
+        });
 
-      throw error;
-    }
-  },
-  {
-    connection: redisConnection,
-    concurrency: 5,
-  },
-);
+        throw error;
+      }
+    },
+    {
+      connection: redisConnection,
+      concurrency: 5,
+    },
+  );
+};
+
+declare global {
+  var globalWorker: undefined | ReturnType<typeof createEventWorker>;
+}
+
+export const eventWorker = globalThis.globalWorker ?? createEventWorker();
+
+if (process.env.NODE_ENV !== "production")
+  globalThis.globalWorker = eventWorker;
