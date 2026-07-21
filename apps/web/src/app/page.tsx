@@ -1,101 +1,155 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+
+interface Job {
+  id: string;
+  type: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  bullJobId: string | null;
+  createdAt: string;
+}
+
+interface EventItem {
+  id: string;
+  name: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  jobs: Job[];
+}
+
+export default function HomePage() {
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventName, setEventName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchEvents = async () => {
+    try {
+      const res = await fetch("/api/events");
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data.events || []);
+      }
+    } catch (err) {
+      console.error("Failed to load events", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchEvents();
+    const interval = setInterval(fetchEvents, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventName.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: eventName,
+          payload: {
+            timestamp: new Date().toISOString(),
+            source: "dashboard_ui",
+          },
+        }),
+      });
+
+      if (res.ok) {
+        setEventName("");
+        fetchEvents();
+      }
+    } catch (err) {
+      console.error("Failed to trigger event", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "COMPLETED":
+        return "bg-green-100 text-green-800 border-green-300";
+      case "PROCESSING":
+        return "bg-blue-100 text-blue-800 border-blue-300";
+      case "FAILED":
+        return "bg-red-100 text-red-800 border-red-300";
+      default:
+        return "bg-yellow-100 text-yellow-800 border-yellow-300";
+    }
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <main className="max-w-4xl mx-auto p-8 font-sans">
+      <header className="mb-8 border-b pb-4">
+        <h1 className="text-3xl font-bold text-gray-900">
+          EventPulse Telemetry
+        </h1>
+        <p className="text-gray-500 text-sm mt-1">
+          Real-time background event pipeline dashboard
+        </p>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      <section className="bg-gray-50 p-6 rounded-lg border mb-8">
+        <h2 className="text-lg font-semibold mb-4 text-gray-800">
+          Dispatch Test Event
+        </h2>
+        <form onSubmit={handleCreateEvent} className="flex gap-4">
+          <input
+            type="text"
+            value={eventName}
+            onChange={(e) => setEventName(e.target.value)}
+            placeholder="e.g. USER_REGISTERED"
+            className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+          />
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="bg-black text-white px-6 py-2 rounded-md hover:bg-gray-800 disabled:opacity-50"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            {isSubmitting ? "Queuing..." : "Dispatch Event"}
+          </button>
+        </form>
+      </section>
+
+      <section>
+        <h2 className="text-xl font-semibold mb-4 text-gray-800">
+          Recent Streamed Events
+        </h2>
+        <div className="space-y-4">
+          {events.length === 0 ? (
+            <p className="text-gray-400 italic">No events registered yet.</p>
+          ) : (
+            events.map((evt) => (
+              <div
+                key={evt.id}
+                className="p-4 border rounded-lg bg-white shadow-sm flex items-center justify-between"
+              >
+                <div>
+                  <div className="font-mono text-sm font-bold text-gray-900">
+                    {evt.name}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1">ID: {evt.id}</div>
+                </div>
+                <div>
+                  {evt.jobs.map((job) => (
+                    <span
+                      key={job.id}
+                      className={`px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor(job.status)}`}
+                    >
+                      {job.status}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </section>
+    </main>
   );
 }
