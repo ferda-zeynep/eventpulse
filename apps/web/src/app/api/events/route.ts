@@ -4,6 +4,35 @@ import { eventQueue } from "../../../lib/queue";
 
 export const dynamic = "force-dynamic";
 
+export async function GET() {
+  try {
+    const events = await prisma.event.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        jobs: {
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            bullJobId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ events });
+  } catch (error) {
+    console.error("Failed to fetch events:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 },
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();

@@ -15,36 +15,32 @@ const createEventWorker = () => {
     async (job) => {
       console.log(`Processing job ${job.id} of type ${job.name}`);
 
-      const targetId = job.id as string;
-
-      const databaseJob = await prisma.job.findFirst({
-        where: { bullJobId: targetId },
+      const targetJob = await prisma.job.findFirst({
+        where: { bullJobId: job.id },
       });
 
-      if (!databaseJob) {
-        console.error(
-          `Job tracking record not found for bullJobId: ${targetId}`,
-        );
+      if (!targetJob) {
+        console.error(`Job record not found for bullJobId: ${job.id}`);
         return;
       }
 
       try {
         await prisma.job.update({
-          where: { id: databaseJob.id },
+          where: { id: targetJob.id },
           data: { status: "PROCESSING" },
         });
 
         console.log(`Successfully processed event payload:`, job.data.payload);
 
         await prisma.job.update({
-          where: { id: databaseJob.id },
+          where: { id: targetJob.id },
           data: { status: "COMPLETED" },
         });
       } catch (error) {
         console.error(`Failed to process job ${job.id}:`, error);
 
         await prisma.job.update({
-          where: { id: databaseJob.id },
+          where: { id: targetJob.id },
           data: {
             status: "FAILED",
             logs: {
